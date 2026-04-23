@@ -13,7 +13,7 @@ import (
 // Connect opens a PostgreSQL connection pool and verifies it with a ping.
 func Connect(cfg *config.Config) (*sqlx.DB, error) {
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		"postgres://%s:%s@%s:%s/%s?sslmode=require",
 		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName,
 	)
 
