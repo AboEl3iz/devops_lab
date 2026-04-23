@@ -62,7 +62,7 @@ jobs:
 
     outputs:
       ecr_url:   ${{ steps.ecr-login.outputs.registry }}/${{ secrets.ECR_REPO_NAME }}
-      image_tag: ${{ github.sha }}
+      image_tag: ${{ steps.meta.outputs.sha_tag }}
 
     steps:
       - name: Checkout code
@@ -97,16 +97,11 @@ jobs:
           docker push ${{ steps.meta.outputs.ecr_url }}:${{ steps.meta.outputs.sha_tag }}
           docker push ${{ steps.meta.outputs.ecr_url }}:latest
 
-      - name: Trigger CD workflow
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner:   context.repo.owner,
-              repo:    context.repo.repo,
-              workflow_id: 'cd.yml',
-              ref:     'main',
-              inputs: {
-                image_tag: '${{ steps.meta.outputs.sha_tag }}'
-              }
-            });
+  # ── Job 3: Trigger CD ─────────────────────────────────────────────────────────
+  trigger-cd:
+    name: Trigger CD
+    needs: build-and-push
+    uses: ./.github/workflows/cd.yml
+    with:
+      image_tag: ${{ needs.build-and-push.outputs.image_tag }}
+    secrets: inherit
