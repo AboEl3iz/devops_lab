@@ -101,6 +101,9 @@ jobs:
   trigger-cd:
     name: Trigger CD
     needs: build-and-push
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/cd.yml
     with:
       image_tag: ${{ needs.build-and-push.outputs.image_tag }}
