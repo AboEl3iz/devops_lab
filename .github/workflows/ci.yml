@@ -58,6 +58,7 @@ jobs:
     permissions:
       id-token: write   # Required for OIDC
       contents: read
+      actions: write    # Required to trigger CD workflow
 
     outputs:
       ecr_url:   ${{ steps.ecr-login.outputs.registry }}/${{ secrets.ECR_REPO_NAME }}
