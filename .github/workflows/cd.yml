@@ -7,6 +7,12 @@ on:
         description: "Docker image tag to deploy (e.g. sha-abc1234)"
         required: true
         default:  "latest"
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy"
+        required: true
+        type: string
 
 jobs:
   # ── Job 1: Deploy to EC2 ─────────────────────────────────────────────────────
@@ -34,7 +40,7 @@ jobs:
           script: |
             set -euo pipefail
 
-            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+            IMAGE_TAG="${{ inputs.image_tag }}"
             ECR_URL="${{ secrets.ECR_URL }}"
             AWS_REGION="${{ secrets.AWS_REGION }}"
 
