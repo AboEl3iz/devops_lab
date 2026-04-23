@@ -103,7 +103,7 @@ jobs:
         working-directory: lambda
         run: |
           # provided.al2 runtime requires binary named "bootstrap"
-          GOARCH=amd64 GOOS=linux go build -tags lambda.norpc -o bootstrap .
+          CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -tags lambda.norpc -o bootstrap .
           zip lambda.zip bootstrap
           ls -lh lambda.zip
 

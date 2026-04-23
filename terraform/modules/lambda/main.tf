@@ -53,7 +53,7 @@ resource "null_resource" "build_lambda" {
     working_dir = local.lambda_src
     command     = <<-EOT
       echo "Building Lambda binary..."
-      GOARCH=amd64 GOOS=linux go build -tags lambda.norpc -o bootstrap .
+      CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -tags lambda.norpc -o bootstrap .
       zip -o lambda.zip bootstrap
       echo "lambda.zip built successfully"
     EOT
