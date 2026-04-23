@@ -1,0 +1,128 @@
+name: CD — Deploy to EC2 & Lambda
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy (e.g. sha-abc1234)"
+        required: true
+        default:  "latest"
+
+jobs:
+  # ── Job 1: Deploy to EC2 ─────────────────────────────────────────────────────
+  deploy-ec2:
+    name: Deploy container to EC2
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ secrets.AWS_REGION }}
+
+      - name: SSH into EC2 and deploy new image
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_PUBLIC_IP }}
+          username: ec2-user
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+            ECR_URL="${{ secrets.ECR_URL }}"
+            AWS_REGION="${{ secrets.AWS_REGION }}"
+
+            # Authenticate with ECR
+            aws ecr get-login-password --region "$AWS_REGION" | \
+              docker login --username AWS --password-stdin "$ECR_URL"
+
+            # Pull the new image
+            docker pull "$ECR_URL:$IMAGE_TAG"
+
+            # Blue/green-lite: stop old, start new
+            docker stop go-api  || true
+            docker rm   go-api  || true
+
+            docker run -d \
+              --name go-api \
+              --restart always \
+              -p 8080:8080 \
+              -e DB_HOST="${{ secrets.DB_HOST }}" \
+              -e DB_PORT="5432" \
+              -e DB_USER="${{ secrets.DB_USER }}" \
+              -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+              -e DB_NAME="${{ secrets.DB_NAME }}" \
+              -e PORT="8080" \
+              "$ECR_URL:$IMAGE_TAG"
+
+            # Clean up dangling images to stay under ECR 500 MB free tier
+            docker image prune -f
+
+            # Smoke test
+            sleep 5
+            curl -sf http://localhost:8080/health | grep '"status":"ok"'
+            echo "Deployment successful: $IMAGE_TAG"
+
+  # ── Job 2: Deploy Lambda ─────────────────────────────────────────────────────
+  deploy-lambda:
+    name: Build and deploy Lambda function
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go 1.21
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: true
+          cache-dependency-path: lambda/go.sum
+
+      - name: Download Lambda dependencies
+        working-directory: lambda
+        run: go mod download
+
+      - name: Build Lambda binary
+        working-directory: lambda
+        run: |
+          # provided.al2 runtime requires binary named "bootstrap"
+          GOARCH=amd64 GOOS=linux go build -tags lambda.norpc -o bootstrap .
+          zip lambda.zip bootstrap
+          ls -lh lambda.zip
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:     ${{ secrets.AWS_REGION }}
+
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
+            --zip-file fileb://lambda/lambda.zip \
+            --region "${{ secrets.AWS_REGION }}"
+
+      - name: Wait for Lambda update to complete
+        run: |
+          aws lambda wait function-updated \
+            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+
+      - name: Publish Lambda version
+        run: |
+          aws lambda publish-version \
+            --function-name "${{ secrets.LAMBDA_FUNCTION_NAME }}" \
+            --region "${{ secrets.AWS_REGION }}"
+          echo "Lambda deployed successfully"

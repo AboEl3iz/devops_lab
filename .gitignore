@@ -1,0 +1,30 @@
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/crash.*.log
+terraform/*.tfvars
+terraform/*.tfvars.json
+terraform/override.tf
+terraform/override.tf.json
+terraform/*_override.tf
+terraform/*_override.tf.json
+terraform/.terraformrc
+terraform/terraform.rc
+
+# SSH Keys
+*.pem
+agent.md
+go-api-lab-key.pem
+instructions.md
+# Go / Lambda builds
+lambda/bootstrap
+lambda/lambda.zip
+backend/main
+
+# Go modules
+# go.sum (We usually keep this, but if user wants to ignore it)
+
+# Env files
+.env
